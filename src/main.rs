@@ -52,7 +52,7 @@ static USB_EP_OUT_BUFFER: StaticCell<[u8; 1024]> = StaticCell::new();
 async fn main(spawner: Spawner) {
     rtt_target::rtt_init_defmt!();
 
-    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
+    let config = esp_hal::Config::default().with_cpu_clock(CpuClock::_80MHz);
     let p = esp_hal::init(config);
 
     let timer0 = SystemTimer::new(p.SYSTIMER);
