@@ -3,7 +3,7 @@
 
 ESPUP_VERSION := "0.17.1"
 ESPFLASH_VERSION := "4.4.0"
-ESP_RUST_VERSION := "1.98.0.0"
+ESP_RUST_VERSION := "1.99.0.0"
 
 _default:
     @just --list --unsorted

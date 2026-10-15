@@ -13,9 +13,11 @@ restriction, so a flash from a running RHAP-D needs no button.
 
 import glob
 import os
+import plistlib
 import select
 import signal
 import struct
+import subprocess
 import sys
 import termios
 import time
@@ -60,6 +62,54 @@ WDT_TIMEOUT = 2000
 
 def ports():
     """Yield (device path, (vid, pid), interface number) for each CDC port."""
+    if sys.platform == "darwin":
+        yield from ports_darwin()
+    else:
+        yield from ports_linux()
+
+
+def ports_darwin():
+    out = subprocess.run(
+        ["ioreg", "-r", "-c", "IOUSBHostDevice", "-l", "-a"],
+        capture_output=True,
+        check=True,
+    ).stdout
+    found = []
+    for usb in plistlib.loads(out) if out else []:
+        found += acm_ports(usb)
+    yield from sorted(found)
+
+
+def acm_ports(node):
+    """Return the CDC ports of node and of any devices behind it."""
+    found = []
+    for child in node.get("IORegistryEntryChildren", []):
+        if child.get("IOObjectClass") == "IOUSBHostDevice":
+            found += acm_ports(child)
+        elif "bInterfaceNumber" in child:
+            dev = callout(child)
+            if dev:
+                # macOS hangs the tty off the data interface, Linux
+                # off the control interface just before it.
+                num = f"{child['bInterfaceNumber'] - 1:02x}"
+                ident = (f"{child['idVendor']:04x}", f"{child['idProduct']:04x}")
+                found.append((dev, ident, num))
+        else:
+            found += acm_ports(child)
+    return found
+
+
+def callout(iface):
+    for data in iface.get("IORegistryEntryChildren", []):
+        if data.get("IOObjectClass") != "AppleUSBACMData":
+            continue
+        for tty in data.get("IORegistryEntryChildren", []):
+            if "IOCalloutDevice" in tty:
+                return tty["IOCalloutDevice"]
+    return None
+
+
+def ports_linux():
     for tty in sorted(glob.glob("/sys/class/tty/ttyACM*")):
         iface = os.path.realpath(tty + "/device")
         usb = os.path.dirname(iface)
